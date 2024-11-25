@@ -36,11 +36,11 @@ def getSpark(appName):
     return spark
 
 
-def get_dune_query_result():
-    headers = {"X-DUNE-API-KEY": tvp_app_config.get('dune_api_key')}
-    query_id = tvp_app_config.get('dune_tvp_query_id')
-    url = tvp_app_config.get('dune_query_execution_result_api').format(query_id=query_id, limit_value=1, offset_value=0)
-    logger.info(f"URL - {url}")
+def get_dune_query_result(logger_inner, app_config):
+    headers = {"X-DUNE-API-KEY": app_config.get('dune_api_key')}
+    query_id = app_config.get('dune_tvp_query_id')
+    url = app_config.get('dune_query_execution_result_api').format(query_id=query_id, limit_value=1, offset_value=0)
+    logger_inner.info(f"URL - {url}")
     response = requests.request("GET", url=url, headers=headers)
 
     print(json.loads(response.text))

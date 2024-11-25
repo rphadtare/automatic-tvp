@@ -4,11 +4,15 @@ import os
 import sys
 
 from pyspark.sql.types import DecimalType
-
-from common import tvp_app_config, getSpark
 from pyspark.sql.functions import col, sum, count
 
+from tvp.common import tvp_app_config, getSpark
+
 logger = logging.getLogger(__name__)
+
+
+def sample():
+    print("Hello sample!")
 
 
 ###
@@ -35,7 +39,7 @@ def main():
     # to find out top 5 verticals as per the highest transactions count
     spark \
         .sql(
-            """
+        """
                 select vertical, sum(total_transactions_per_safe) as highest_transaction_count 
                 from eth_transfers_data_aggregated_vertical group by 1 order by 2 desc
             """) \
@@ -44,7 +48,7 @@ def main():
     # to find out top 5 verticals as per the highest transactions volume
     spark \
         .sql(
-            """
+        """
                 select vertical, sum(total_amount_usd_per_safe) as highest_transaction_volume
                 from eth_transfers_data_aggregated_vertical group by 1 order by 2 desc
             """) \
@@ -57,7 +61,7 @@ def main():
     # to find out top 5 protocol as per the highest transactions count
     spark \
         .sql(
-            """
+        """
             select protocol, sum(total_transactions_per_safe) as highest_transaction_count 
             from eth_transfers_data_aggregated_protocol group by 1 order by 2 desc
             """) \
@@ -66,7 +70,7 @@ def main():
     # to find out top 5 protocol as per the highest transactions volume
     spark \
         .sql(
-            """
+        """
             select protocol, sum(total_amount_usd_per_safe) as highest_transaction_volume
             from eth_transfers_data_aggregated_protocol group by 1 order by 2 desc
             """) \
