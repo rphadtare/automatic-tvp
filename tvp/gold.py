@@ -1,15 +1,3 @@
-import glob
-import logging
-import os
-import sys
-
-from pyspark.sql.types import DecimalType
-
-from common import tvp_app_config, getSpark
-from pyspark.sql.functions import col, sum, count
-
-logger = logging.getLogger(__name__)
-
 ###
 # Processing silver data by aggregation and move to existing gold layer as per Month and Year of block date
 # This script will use spark to process data from silver layer for given month and year.
@@ -26,6 +14,57 @@ logger = logging.getLogger(__name__)
 # protocol data -
 # /gold/eth_transfers_data_aggregated_protocol/year=2024/month=11/*.parquet
 # #
+
+import glob
+import logging
+import os
+import sys
+
+from pyspark.sql.types import DecimalType
+
+from tvp.common import tvp_app_config, getSpark
+from pyspark.sql.functions import col, sum, count
+from pyspark.sql import DataFrame
+
+logger = logging.getLogger(__name__)
+
+
+##
+# Get summarised information per week and vertical
+# #
+def get_safe_per_vertical_week_df(silver_df: DataFrame):
+    df_safe_accounts_per_vertical = silver_df.select("safe_account", "week_of_month", "week_of_year", "vertical").distinct() \
+        .groupBy("week_of_month", "week_of_year", "vertical").agg(count("safe_account").alias("unique_safes"))
+
+    # get aggregated usd amount for safe account per vertical and week
+    df_total_safe_transactions_per_vertical = silver_df.groupBy("week_of_month", "week_of_year", "vertical", "safe_account") \
+        .agg(count("safe_account").alias("total_transactions_per_safe"), \
+             sum("amount_usd").cast(DecimalType(15, 2)).alias("total_amount_usd_per_safe"))
+
+    df_vertical_gold = df_safe_accounts_per_vertical.join(df_total_safe_transactions_per_vertical, \
+                                                          on=["week_of_month", "week_of_year", "vertical"], how="inner")
+
+    # df_vertical_gold.show(10, truncate=False)
+    return df_vertical_gold
+
+
+##
+# Get summarised information per week and protocol
+# #
+def get_safe_per_protocol_week_df(silver_df: DataFrame):
+    df_safe_accounts_per_protocol = silver_df.select("safe_account", "week_of_month", "week_of_year", "protocol").distinct() \
+        .groupBy("week_of_month", "week_of_year", "protocol").agg(count("safe_account").alias("unique_safes"))
+
+    # get aggregated usd amount for safe account per vertical and week
+    df_total_safe_transactions_per_protocol = silver_df.groupBy("week_of_month", "week_of_year", "protocol", "safe_account") \
+        .agg(count("safe_account").alias("total_transactions_per_safe"), \
+             sum("amount_usd").cast(DecimalType(15, 2)).alias("total_amount_usd_per_safe"))
+
+    df_protocol_gold = df_safe_accounts_per_protocol.join(df_total_safe_transactions_per_protocol, \
+                                                          on=["week_of_month", "week_of_year", "protocol"], how="inner")
+
+    # df_protocol_gold.show(10, truncate=False)
+    return df_protocol_gold
 
 
 def main():
@@ -65,18 +104,7 @@ def main():
 
     ###
     # get distinct safe accounts by week and vertical
-    df_safe_accounts_per_vertical = df.select("safe_account", "week_of_month", "week_of_year", "vertical").distinct() \
-        .groupBy("week_of_month", "week_of_year", "vertical").agg(count("safe_account").alias("unique_safes"))
-
-    # get aggregated usd amount for safe account per vertical and week
-    df_total_safe_transactions_per_vertical = df.groupBy("week_of_month", "week_of_year", "vertical", "safe_account") \
-        .agg(count("safe_account").alias("total_transactions_per_safe"), \
-             sum("amount_usd").cast(DecimalType(15, 2)).alias("total_amount_usd_per_safe"))
-
-    df_vertical_gold = df_safe_accounts_per_vertical.join(df_total_safe_transactions_per_vertical, \
-                                                          on=["week_of_month", "week_of_year", "vertical"], how="inner")
-
-    df_vertical_gold.show(10, truncate=False)
+    df_vertical_gold = get_safe_per_vertical_week_df(df)
     vertical_gold_path = tvp_app_config.get('gold_path_vertical').format(curr_path_value=curr_path,
                                                                          year_value=year_value,
                                                                          month_value=month_value)
@@ -85,18 +113,7 @@ def main():
 
     ###
     # get distinct safe accounts by week and protocol
-    df_safe_accounts_per_protocol = df.select("safe_account", "week_of_month", "week_of_year", "protocol").distinct() \
-        .groupBy("week_of_month", "week_of_year", "protocol").agg(count("safe_account").alias("unique_safes"))
-
-    # get aggregated usd amount for safe account per vertical and week
-    df_total_safe_transactions_per_protocol = df.groupBy("week_of_month", "week_of_year", "protocol", "safe_account") \
-        .agg(count("safe_account").alias("total_transactions_per_safe"), \
-             sum("amount_usd").cast(DecimalType(15, 2)).alias("total_amount_usd_per_safe"))
-
-    df_protocol_gold = df_safe_accounts_per_protocol.join(df_total_safe_transactions_per_protocol, \
-                                                          on=["week_of_month", "week_of_year", "protocol"], how="inner")
-
-    df_protocol_gold.show(10, truncate=False)
+    df_protocol_gold = get_safe_per_protocol_week_df(silver_df=df)
     protocol_gold_path = tvp_app_config.get('gold_path_protocol').format(curr_path_value=curr_path,
                                                                          year_value=year_value,
                                                                          month_value=month_value)
