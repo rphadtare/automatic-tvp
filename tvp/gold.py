@@ -67,14 +67,8 @@ def get_safe_per_protocol_week_df(silver_df: DataFrame):
     return df_protocol_gold
 
 
-def main():
-    block_date = None
-
-    # To read all arguments
-    args = sys.argv[1:]
-    if len(args) > 0:
-        block_date = args[0]
-        logger.info(f"Block date given: {block_date}")
+def main(arg1):
+    block_date = arg1
 
     logger.info("Transformation to Gold...")
     curr_path = None
@@ -122,4 +116,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    block_date = None
+    # To read all arguments
+    args = sys.argv[1:]
+    if len(args) > 0:
+        block_date = args[0]
+        logger.info(f"Block date given: {block_date}")
+
+    main(block_date)
