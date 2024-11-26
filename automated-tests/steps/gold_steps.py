@@ -5,6 +5,8 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col
 from pyspark.sql.types import DecimalType
 
+import sys
+sys.path.append("..")
 from tvp.gold import get_safe_per_vertical_week_df, get_safe_per_protocol_week_df
 
 logger = logging.getLogger(__name__)

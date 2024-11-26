@@ -14,36 +14,25 @@ import glob
 import logging
 import os
 import sys
-from calendar import monthcalendar
 
 import pandas as pd
-from pyspark.sql.functions import to_date, lit, year, month, weekofyear, udf, day, dayofmonth, col
+from pyspark.sql.functions import to_date, lit, year, month, weekofyear, udf, day, dayofmonth, col, date_format
 from pyspark.sql import DataFrame, SparkSession
 
 from tvp.common import tvp_app_config, getSpark
 
 logger = logging.getLogger(__name__)
 
-
-##
-# UDF to get week number of month for given date
-# #
-def get_week_of_month(year_, month_, day_):
-    return next(
-        (week_number for week_number, days_of_week in enumerate(monthcalendar(year_, month_), start=1) if
-         day_ in days_of_week),
-        None,
-    )
-
-
-# converting normal function to UDF
-udf_get_week = udf(get_week_of_month)
-
-
 ##
 # To quarantined latest bronze data
 # #
 def quarantined_bronze_data(spark: SparkSession, raw_df: DataFrame, block_date):
+    # converting normal function to UDF
+    # udf_get_week = udf(get_week_of_month)
+    # spark.udf.register("udf_get_week", udf_get_week)
+
+    spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
+
     incr_df = raw_df.select("token_category", "event_name", "tx_hash", "vertical", "protocol", "amount_usd") \
         .filter("event_name is not null and event_name = 'Transfer'") \
         .filter("amount_usd is not null and amount_usd > 0") \
@@ -53,20 +42,17 @@ def quarantined_bronze_data(spark: SparkSession, raw_df: DataFrame, block_date):
         .withColumn("year", year("block_date")) \
         .withColumn("month", month("block_date")) \
         .withColumn("week_of_year", weekofyear("block_date")) \
-        .withColumn("week_of_month", udf_get_week(col("year"), col("month"), dayofmonth(col("block_date")))) \
-        .drop("year", "month")
+        .withColumn("day", dayofmonth(col("block_date"))) \
+        .withColumn("week_of_month", date_format(col("block_date"), "W"))\
+        .selectExpr("token_category", "event_name", "tx_hash", "vertical", "protocol", "amount_usd",\
+                    "block_date", "week_of_year", "week_of_month")
+
 
     return incr_df
 
 
-def main():
-    block_date = None
-
-    # To read all arguments
-    args = sys.argv[1:]
-    if len(args) > 0:
-        block_date = args[0]
-        logger.info(f"Block date given: {block_date}")
+def main(arg1):
+    block_date = arg1
 
     logger.info("Ingestion to Silver...")
     curr_path = None
@@ -84,6 +70,10 @@ def main():
     logger.info("Incrementally updating into silver layer for data -> " + bronze_path)
 
     spark = getSpark("TVP silver")
+    # spark.sparkContext.addPyFile(path="/Users/rohitphadtare/IdeaProjects/automatic-tvp/tvp/util.py")
+    # spark.sparkContext.addPyFile(path="/Users/rohitphadtare/IdeaProjects/automatic-tvp/tvp/silver.py")
+    # print(spark.sparkContext.listFiles)
+
     df = spark.read.options(header=True, inferSchema=True).format("csv").load(path=bronze_path)
     # df.printSchema()
     # df.show(truncate=False)
@@ -101,13 +91,22 @@ def main():
 
     if not os.path.exists(silver_path):
         os.makedirs(silver_path)
+        logger.info(f"Directory created: {silver_path}")
     else:
         full_df = spark.read.format("parquet").load(silver_path)
         # full_df.show(truncate=False)
 
-    res_df = full_df.unionByName(incr_df).drop_duplicates()
+    res_df = incr_df.unionByName(full_df).drop_duplicates()
+    # res_df.show(truncate=False)
     res_df.write.mode("overwrite").format("parquet").save(silver_path)
 
 
 if __name__ == "__main__":
-    main()
+    block_date = None
+    # To read all arguments
+    args = sys.argv[1:]
+    if len(args) > 0:
+        block_date = args[0]
+        logger.info(f"Block date given: {block_date}")
+
+    main(block_date)

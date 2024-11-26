@@ -59,14 +59,8 @@ def save_to_bronze(res_df, curr_path, logger_inner, app_config):
         logger.warning("Input dataframe is empty !!!")
 
 
-def main():
-    block_date = None
-
-    # To read all arguments
-    args = sys.argv[1:]
-    if len(args) > 0:
-        block_date = args[0]
-        logger.info(f"Block date given: {block_date}")
+def main(arg1):
+    block_date = arg1
 
     logger.info("Ingestion to Bronze...")
     # spark = getSpark("TVP bronze process")
@@ -80,4 +74,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+
+    block_date = None
+    # To read all arguments
+    args = sys.argv[1:]
+    if len(args) > 0:
+        block_date = args[0]
+        logger.info(f"Block date given: {block_date}")
+
+    main(block_date)
