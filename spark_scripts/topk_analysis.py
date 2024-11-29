@@ -6,7 +6,7 @@ import sys
 from pyspark.sql.types import DecimalType
 from pyspark.sql.functions import col, sum, count
 
-from tvp.common import tvp_app_config, getSpark
+from spark_scripts.common import tvp_app_config, getSpark
 
 logger = logging.getLogger(__name__)
 
@@ -20,20 +20,21 @@ def sample():
 # #
 
 
-def main():
-    curr_path = None
-    logger.info("Local dev flag --> " + str(tvp_app_config.get('dev_flag')))
-
-    if tvp_app_config.get('dev_flag'):
-        curr_path = os.getcwd()
-        block_date = tvp_app_config.get('local_test_block_date')
-        logger.info(f"Block date : {block_date}")
-    else:
-        pass
-
+def main(arg1, date_override_flag=True):
+    block_date = arg1
     logger.info("Top K analysis using vertical data")
+
+    curr_path = "data"
+    logger.info("Local dev flag --> " + str(tvp_app_config.get('dev_flag')))
+    logger.info("arg1 --> " + arg1)
+    logger.info("date_override_flag --> " + str(date_override_flag))
+
+    if tvp_app_config.get('dev_flag') and not date_override_flag:
+        block_date = tvp_app_config.get('local_test_block_date')
+
+    logger.info(f"Block date : {block_date}")
     spark = getSpark("TOP K analysis")
-    spark.read.format("parquet").load(f"{curr_path}/data/gold/eth_transfers_data_aggregated_vertical/year=*/month=*"). \
+    spark.read.format("delta").load(f"{curr_path}/gold/eth_transfers_data_aggregated_vertical/"). \
         createOrReplaceTempView("eth_transfers_data_aggregated_vertical")
 
     # to find out top 5 verticals as per the highest transactions count
@@ -55,7 +56,7 @@ def main():
         .limit(5).show(truncate=False)
 
     logger.info("Top K analysis using protocol data")
-    spark.read.format("parquet").load(f"{curr_path}/data/gold/eth_transfers_data_aggregated_protocol/year=*/month=*"). \
+    spark.read.format("delta").load(f"{curr_path}/gold/eth_transfers_data_aggregated_protocol/"). \
         createOrReplaceTempView("eth_transfers_data_aggregated_protocol")
 
     # to find out top 5 protocol as per the highest transactions count
@@ -78,4 +79,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    block_date = None
+    # To read all arguments
+    args = sys.argv[1:]
+    if len(args) > 0:
+        block_date = args[0]
+        logger.info(f"Block date given: {block_date}")
+
+    main(block_date)

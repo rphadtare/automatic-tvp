@@ -4,8 +4,10 @@ import os
 import sys
 
 import pandas as pd
+from pyspark.sql import SparkSession
 
-from tvp.common import get_dune_query_result, tvp_app_config
+sys.path.append(".")
+from common import get_dune_query_result, tvp_app_config, getSpark
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +23,10 @@ def get_input_df(logger_inner, app_config):
     if not app_config.get('dev_flag'):
         res_df = get_dune_query_result(logger_inner=logger_inner, app_config=app_config)
     else:
-        curr_path = os.getcwd()
-        stg_path = app_config.get('stg_path').format(curr_path_value=curr_path, block_date_value=app_config.get('local_test_block_date'))
+        # curr_path = os.getcwd()
+        curr_path = "data"
+        stg_path = app_config.get('stg_path').format(curr_path_value=curr_path,
+                                                     block_date_value=app_config.get('local_test_block_date'))
         logger_inner.info(f"Staging path to read raw data for this run : {stg_path}")
 
         all_files = glob.glob(stg_path)
@@ -49,24 +53,32 @@ def save_to_bronze(res_df, curr_path, logger_inner, app_config):
 
         res_df.drop(columns=["block_date"], inplace=True)
 
-        if not os.path.exists(tvp_app_config.get('bronze_path').format(curr_path_value=curr_path, block_date_value=block_date)):
-            os.makedirs(tvp_app_config.get('bronze_path').format(curr_path_value=curr_path, block_date_value=block_date))
+        if not os.path.exists(
+                app_config.get('bronze_path').format(curr_path_value=curr_path, block_date_value=block_date)):
+            os.makedirs(app_config.get('bronze_path').format(curr_path_value=curr_path, block_date_value=block_date))
 
-        bronze_file_path = tvp_app_config.get('bronze_path').format(curr_path_value=curr_path, block_date_value=block_date) + "/data.csv"
-        logger.info("Loading staging data to bronze --> " + bronze_file_path)
+        bronze_file_path = app_config.get('bronze_path').format(curr_path_value=curr_path,
+                                                                block_date_value=block_date) + "/data.csv"
+        logger_inner.info("Loading staging data to bronze --> " + bronze_file_path)
         res_df.to_csv(path_or_buf=bronze_file_path, header=True, mode="w", index=False)
     else:
-        logger.warning("Input dataframe is empty !!!")
+        logger_inner.warning("Input dataframe is empty !!!")
 
 
-def main(arg1):
-    block_date = arg1
-
+def main(arg1, date_override_flag=True):
     logger.info("Ingestion to Bronze...")
     # spark = getSpark("TVP bronze process")
     curr_path = None
 
     logger.info("Local dev flag --> " + str(tvp_app_config.get('dev_flag')))
+    logger.info("arg1 --> " + arg1)
+    logger.info("date_override_flag --> " + str(date_override_flag))
+    logger.info("pwd: " + os.getcwd())
+
+    if date_override_flag:
+        tvp_app_config['local_test_block_date'] = arg1
+
+    spark = getSpark("TVP bronze")
 
     res_df, curr_path = get_input_df(logger, tvp_app_config)
     print(res_df)

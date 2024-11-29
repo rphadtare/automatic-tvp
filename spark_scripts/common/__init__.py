@@ -1,5 +1,9 @@
 import json
 import os
+
+from delta import *
+from delta.tables import *
+import pyspark
 from dotenv import load_dotenv
 import logging
 import colorlog
@@ -21,17 +25,24 @@ if load_dotenv():
         'dev_flag': os.getenv('FLAG_FOR_LOCAL_TEST'),
         'local_test_block_date': os.getenv('LOCAL_TEST_BLOCK_DATE'),
         'stg_path': "{curr_path_value}/stg/raw_eth_transfers_data/block_date={block_date_value}/*.csv",
-        'bronze_path': "{curr_path_value}/data/bronze/eth_transfers_data/block_date={block_date_value}/",
-        'silver_path': "{curr_path_value}/data/silver/eth_transfers_data_quarantined/year={year_value}/month={month_value}/",
-        'gold_path_vertical': "{curr_path_value}/data/gold/eth_transfers_data_aggregated_vertical/year={year_value}/month={month_value}/",
-        'gold_path_protocol': "{curr_path_value}/data/gold/eth_transfers_data_aggregated_protocol/year={year_value}/month={month_value}/"
+        'bronze_path': "{curr_path_value}/bronze/eth_transfers_data/block_date={block_date_value}/",
+        'silver_path': "{curr_path_value}/silver/eth_transfers_data_quarantined/",
+        'gold_path_vertical': "{curr_path_value}/gold/eth_transfers_data_aggregated_vertical/",
+        'gold_path_protocol': "{curr_path_value}/gold/eth_transfers_data_aggregated_protocol/"
     }
     logger.info("APP Env loaded !!")
     logger.debug(tvp_app_config)
 
 
-def getSpark(appName):
-    spark = SparkSession.builder.appName(appName).master("local[2]").getOrCreate()
+def getSpark(appName, master="spark://spark-master:7077"):
+    conf = pyspark.SparkConf()
+    conf.set("spark.jars.packages", "io.delta:delta-core_2.12:2.1.0," "io.delta:delta-spark_2.12:3.2.1")
+
+    builder = SparkSession.builder.config(conf=conf).appName(appName).master(master=master) \
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+
+    spark = delta.configure_spark_with_delta_pip(builder).getOrCreate()
     spark.sparkContext.setLogLevel(tvp_app_config.get("spark_log_level"))
     return spark
 

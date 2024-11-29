@@ -20,10 +20,11 @@ import logging
 import os
 import sys
 
-from pyspark.sql.types import DecimalType
+from delta import DeltaTable
+from pyspark.sql.types import DecimalType, IntegerType
 
-from tvp.common import tvp_app_config, getSpark
-from pyspark.sql.functions import col, sum, count
+from spark_scripts.common import tvp_app_config, getSpark
+from pyspark.sql.functions import col, sum, count, year, lit
 from pyspark.sql import DataFrame
 
 logger = logging.getLogger(__name__)
@@ -67,30 +68,29 @@ def get_safe_per_protocol_week_df(silver_df: DataFrame):
     return df_protocol_gold
 
 
-def main(arg1):
+def main(arg1, date_override_flag=True):
     block_date = arg1
 
     logger.info("Transformation to Gold...")
-    curr_path = None
+    curr_path = "data"
     logger.info("Local dev flag --> " + str(tvp_app_config.get('dev_flag')))
+    logger.info("arg1 --> " + arg1)
+    logger.info("date_override_flag --> " + str(date_override_flag))
 
-    if tvp_app_config.get('dev_flag'):
-        curr_path = os.getcwd()
+    if tvp_app_config.get('dev_flag') and not date_override_flag:
         block_date = tvp_app_config.get('local_test_block_date')
-        logger.info(f"Block date : {block_date}")
-    else:
-        pass
+
+    logger.info(f"Block date : {block_date}")
 
     # Read latest data from silver layer
-    year_value = block_date.split("-")[0]
-    month_value = block_date.split("-")[1]
+    year_value = int(block_date.split("-")[0])
+    month_value = int(block_date.split("-")[1])
 
-    silver_path = tvp_app_config.get('silver_path').format(curr_path_value=curr_path, year_value=year_value,
-                                                           month_value=month_value)
+    silver_path = tvp_app_config.get('silver_path').format(curr_path_value=curr_path)
     logger.info("Aggregating data from -> " + silver_path)
 
     spark = getSpark("TVP gold")
-    df = spark.read.format("parquet").load(silver_path). \
+    df = DeltaTable.forPath(spark, silver_path).toDF().filter(f"year = {year_value} and month = {month_value}"). \
         selectExpr("tx_hash as safe_account", "block_date", "week_of_month", "week_of_year", "vertical", "protocol", \
                    "cast(amount_usd as Decimal(15,2)) as amount_usd")
     # df.printSchema()
@@ -98,21 +98,25 @@ def main(arg1):
 
     ###
     # get distinct safe accounts by week and vertical
-    df_vertical_gold = get_safe_per_vertical_week_df(df)
-    vertical_gold_path = tvp_app_config.get('gold_path_vertical').format(curr_path_value=curr_path,
-                                                                         year_value=year_value,
-                                                                         month_value=month_value)
+    df_vertical_gold = get_safe_per_vertical_week_df(df) \
+        .withColumn("year", lit(year_value).cast(IntegerType())) \
+        .withColumn("month", lit(month_value).cast(IntegerType()))
+
+    vertical_gold_path = tvp_app_config.get('gold_path_vertical').format(curr_path_value=curr_path)
     logger.info(f"loading latest data into: {vertical_gold_path}")
-    df_vertical_gold.write.mode("overwrite").format("parquet").save(vertical_gold_path)
+    df_vertical_gold.write.mode("overwrite").option("partitionOverwriteMode", "dynamic") \
+        .format("delta").partitionBy("year", "month").save(vertical_gold_path)
 
     ###
     # get distinct safe accounts by week and protocol
-    df_protocol_gold = get_safe_per_protocol_week_df(silver_df=df)
-    protocol_gold_path = tvp_app_config.get('gold_path_protocol').format(curr_path_value=curr_path,
-                                                                         year_value=year_value,
-                                                                         month_value=month_value)
+    df_protocol_gold = get_safe_per_protocol_week_df(silver_df=df)\
+        .withColumn("year", lit(year_value).cast(IntegerType())) \
+        .withColumn("month", lit(month_value).cast(IntegerType()))
+
+    protocol_gold_path = tvp_app_config.get('gold_path_protocol').format(curr_path_value=curr_path)
     logger.info(f"loading latest data into: {protocol_gold_path}")
-    df_protocol_gold.write.mode("overwrite").format("parquet").save(protocol_gold_path)
+    df_protocol_gold.write.mode("overwrite").option("partitionOverwriteMode", "dynamic") \
+        .format("delta").partitionBy("year", "month").save(protocol_gold_path)
 
 
 if __name__ == "__main__":

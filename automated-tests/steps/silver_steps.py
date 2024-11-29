@@ -5,7 +5,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import to_date, col
 from pyspark.sql.types import IntegerType, DecimalType
 
-from tvp.silver import quarantined_bronze_data
+from spark_scripts.silver import quarantined_bronze_data
 
 logger = logging.getLogger(__name__)
 spark = SparkSession.builder.appName("cucumber silver app").master("local[2]").getOrCreate()
