@@ -7,7 +7,7 @@ from pyspark.sql.types import DecimalType
 
 import sys
 sys.path.append("..")
-from tvp.gold import get_safe_per_vertical_week_df, get_safe_per_protocol_week_df
+from spark_scripts.gold import get_safe_per_vertical_week_df, get_safe_per_protocol_week_df
 
 logger = logging.getLogger(__name__)
 spark = SparkSession.builder.appName("cucumber gold app").master("local[2]").getOrCreate()

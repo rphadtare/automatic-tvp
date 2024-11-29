@@ -1,4 +1,4 @@
-import tvp.common
-from tvp.topk_analysis import sample
+import spark_scripts.common
+from spark_scripts.topk_analysis import sample
 
 sample()
