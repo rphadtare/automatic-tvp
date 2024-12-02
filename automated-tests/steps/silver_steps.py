@@ -43,7 +43,7 @@ def step_impl(context, bronze_path):
 def step_impl(context):
     logger.info("Quarantining bronze data !!")
     global raw_df, block_date
-    raw_df = quarantined_bronze_data(spark=spark, raw_df=raw_df, block_date=block_date)\
+    raw_df = quarantined_bronze_data(spark=spark, raw_df=raw_df, block_date_=block_date)\
         .withColumn("week_of_month", col("week_of_month").cast(IntegerType()))\
         .selectExpr("trim(token_category) as token_category", "trim(event_name) as event_name",\
                     "trim(tx_hash) as tx_hash", "trim(vertical) as vertical",\
