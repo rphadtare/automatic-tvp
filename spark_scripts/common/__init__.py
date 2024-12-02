@@ -34,11 +34,11 @@ if load_dotenv():
     logger.debug(tvp_app_config)
 
 
-def getSpark(appName, master="spark://spark-master:7077"):
+def get_spark(appname_, master="spark://spark-master:7077"):
     conf = pyspark.SparkConf()
     conf.set("spark.jars.packages", "io.delta:delta-core_2.12:2.1.0," "io.delta:delta-spark_2.12:3.2.1")
 
-    builder = SparkSession.builder.config(conf=conf).appName(appName).master(master=master) \
+    builder = SparkSession.builder.config(conf=conf).appName(appname_).master(master=master) \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
 
@@ -54,7 +54,12 @@ def get_dune_query_result(logger_inner, app_config):
     logger_inner.info(f"URL - {url}")
     response = requests.request("GET", url=url, headers=headers)
 
-    print(json.loads(response.text))
+    logger_inner.info("Result of dune query execution - ")
+    logger_inner.info(json.loads(response.text))
+
     query_res = json.loads(response.text)["result"]["rows"]
     res_df = pd.DataFrame.from_dict(query_res)
+    logger_inner.info("Result pandas DF: ")
+    print(res_df)
+    print(res_df.info)
     return res_df

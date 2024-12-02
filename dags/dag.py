@@ -61,3 +61,4 @@ with DAG(
 
     # set dependency between task
     bronze_task >> silver_task >> gold_task >> topk_analysis_task
+
